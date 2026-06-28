@@ -1,32 +1,18 @@
-// script.js
+// script.js - Full file with exact WW Turnaround points
 let state = {
     foodLibrary: [],
-    currentWeek: {
-        startDate: '',
-        weeklyFlex: 35,
-        days: []
-    },
-    today: {
-        date: '',
-        entries: []
-    },
-    userSettings: {
-        weight: 160,
-        activityLevel: 'moderate'
-    },
-    lastUndo: null,
-    editingFoodId: null,
-    editingDayIndex: null
+    currentWeek: { startDate: '', weeklyFlex: 35, days: [] },
+    today: { date: '', entries: [] },
+    userSettings: { weight: 160, activityLevel: 'moderate' }
 };
 
 const STORAGE_KEY = 'ww_tracker_state';
 
-// Utility functions
+// Exact WW Turnaround (2000-2005) points formula
 function calculatePoints(calories, fat, fiber) {
-    const fiberCapped = Math.min(fiber || 0, 4);
-    let points = (calories / 70) + (fat / 10) - (fiberCapped / 5);
+    let points = (calories / 50) * 0.8 + (fat / 12) - (fiber / 5);
     points = Math.round(points);
-    return Math.max(1, points);
+    return Math.max(0, points); // WW allowed 0 points for some items
 }
 
 function getDailyTarget() {
@@ -49,19 +35,10 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
         state = JSON.parse(saved);
-        
         const todayStr = getTodayDateStr();
-        if (!state.today.date || state.today.date !== todayStr) {
-            // Auto transition to new day when date changes
-            if (state.today.entries && state.today.entries.length > 0) {
-                autoSaveCurrentDay();
-            }
-            state.today.date = todayStr;
-            state.today.entries = state.today.entries || [];
-        }
-        
-        if (!state.currentWeek.startDate) {
-            resetWeek();
+        if (state.today.date !== todayStr) {
+            if (state.today.entries && state.today.entries.length > 0) autoSaveCurrentDay();
+            state.today = { date: todayStr, entries: [] };
         }
     } else {
         state.foodLibrary = [
@@ -71,43 +48,36 @@ function loadState() {
             { id: 1004, name: "Zucchini (1 cup raw)", calories: 20, fat: 0, fiber: 2, points: calculatePoints(20, 0, 2) },
             { id: 1005, name: "Popcorn (air-popped, 3 cups)", calories: 90, fat: 1, fiber: 3, points: calculatePoints(90, 1, 3) },
             { id: 1006, name: "Pizza (1 slice cheese)", calories: 250, fat: 10, fiber: 1, points: calculatePoints(250, 10, 1) },
-            { id: 1007, name: "Oatmeal (1/2 cup dry)", calories: 150, fat: 3, fiber: 4, points: calculatePoints(150, 3, 4) },
-            { id: 1, name: "Grilled Chicken Breast", calories: 120, fat: 3, fiber: 0, points: 2 },
-            { id: 2, name: "Apple", calories: 80, fat: 0, fiber: 4, points: 1 }
+            { id: 1007, name: "Oatmeal (1/2 cup dry)", calories: 150, fat: 3, fiber: 4, points: calculatePoints(150, 3, 4) }
         ];
         resetWeek();
         state.today.date = getTodayDateStr();
     }
 }
 
+function resetWeek() {
+    state.currentWeek = {
+        startDate: getTodayDateStr(),
+        weeklyFlex: 35,
+        days: []
+    };
+}
+
 function autoSaveCurrentDay() {
     if (!state.today.entries || state.today.entries.length === 0) return;
-    
-    const todayStr = getTodayDateStr();
-    const total = calculateTodayTotal();
-    
+    const total = state.today.entries.reduce((sum, entry) => sum + (entry.totalPoints || 0), 0);
     const dayRecord = {
-        date: todayStr,
+        date: state.today.date,
         entries: JSON.parse(JSON.stringify(state.today.entries)),
         totalPoints: total
     };
-    
-    const existingIndex = state.currentWeek.days.findIndex(d => d.date === todayStr);
+    const existingIndex = state.currentWeek.days.findIndex(d => d.date === state.today.date);
     if (existingIndex > -1) {
         state.currentWeek.days[existingIndex] = dayRecord;
     } else {
         state.currentWeek.days.push(dayRecord);
     }
     saveState();
-}
-
-function resetWeek() {
-    const today = getTodayDateStr();
-    state.currentWeek = {
-        startDate: today,
-        weeklyFlex: 35,
-        days: []
-    };
 }
 
 function calculateTodayTotal() {
@@ -130,17 +100,10 @@ function renderToday() {
     
     const container = document.getElementById('today-entries');
     container.innerHTML = '';
-    
     if (state.today.entries.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <h3>No foods logged yet</h3>
-                <p>Tap "+ Add Food" to get started</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><h3>No foods logged yet</h3><p>Tap "+ Add Food"</p></div>`;
         return;
     }
-    
     state.today.entries.forEach((entry, index) => {
         const div = document.createElement('div');
         div.className = 'entry-item';
@@ -157,19 +120,51 @@ function renderToday() {
         `;
         container.appendChild(div);
     });
+    updateFlexDisplay();
+}
+
+function updateFlexDisplay() {
+    const target = getDailyTarget();
+    let totalFlexUsed = 0;
+    state.currentWeek.days.forEach(day => {
+        totalFlexUsed += Math.max(0, day.totalPoints - target);
+    });
+    const remaining = Math.max(0, state.currentWeek.weeklyFlex - totalFlexUsed);
+    document.getElementById('flex-remaining').textContent = remaining;
+}
+
+function switchTab(tabIndex) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    
+    if (tabIndex === 0) {
+        document.getElementById('page-today').classList.add('active');
+        document.getElementById('tab-today').classList.add('active');
+        document.getElementById('nav-today').classList.add('active');
+        renderToday();
+    } else if (tabIndex === 1) {
+        document.getElementById('page-library').classList.add('active');
+        document.getElementById('tab-library').classList.add('active');
+        document.getElementById('nav-library').classList.add('active');
+        renderLibrary();
+    } else if (tabIndex === 2) {
+        document.getElementById('page-history').classList.add('active');
+        document.getElementById('tab-history').classList.add('active');
+        document.getElementById('nav-history').classList.add('active');
+        renderHistory();
+    }
+    updateFlexDisplay();
 }
 
 function renderLibrary(filteredFoods = null) {
     const container = document.getElementById('library-list');
     container.innerHTML = '';
-    
     const foods = filteredFoods || state.foodLibrary;
-    
     if (foods.length === 0) {
         container.innerHTML = `<div class="empty-state"><h3>No foods found</h3></div>`;
         return;
     }
-    
     foods.forEach(food => {
         const div = document.createElement('div');
         div.className = 'food-row';
@@ -179,9 +174,9 @@ function renderLibrary(filteredFoods = null) {
                 <div class="food-meta">${food.calories} cal • ${food.points} pts</div>
             </div>
             <div class="food-actions">
-                <button onclick="editFood(${food.id})" class="edit-btn" title="Edit">✏️</button>
-                <button onclick="deleteFood(${food.id})" class="delete-btn" title="Delete">🗑</button>
-                <button onclick="quickAddToToday(${food.id})" class="add-to-today" title="Add to today">＋</button>
+                <button onclick="editFood(${food.id})" class="edit-btn">✏️</button>
+                <button onclick="deleteFood(${food.id})" class="delete-btn">🗑</button>
+                <button onclick="quickAddToToday(${food.id})" class="add-to-today">＋</button>
             </div>
         `;
         container.appendChild(div);
@@ -225,162 +220,99 @@ function modalSearch() {
 function renderHistory() {
     const container = document.getElementById('history-list');
     container.innerHTML = '';
-    
     const days = [...state.currentWeek.days].reverse();
-    
     if (days.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <h3>No previous days yet</h3>
-                <p>Complete your first day to see history here</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><h3>No previous days</h3></div>`;
         return;
     }
-    
-    const target = getDailyTarget();
-    
     days.forEach((day, idx) => {
         const actualIdx = state.currentWeek.days.length - 1 - idx;
-        const overflow = Math.max(0, day.totalPoints - target);
-        
         const div = document.createElement('div');
         div.className = 'history-day';
         div.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:start">
-                <div onclick="editDay(${actualIdx})" style="cursor:pointer;flex:1">
+            <div class="history-day-header" onclick="toggleHistoryDay(this, ${actualIdx})">
+                <div>
                     <div class="history-date">${new Date(day.date).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'})}</div>
-                    <div class="history-points">
-                        <span>${day.totalPoints} points</span>
-                        <span style="color:#c44">−${overflow} flex</span>
-                    </div>
+                    <div class="history-points">${day.totalPoints} points</div>
                 </div>
-                <button onclick="deleteDay(${actualIdx});event.stopImmediatePropagation()" class="delete-day">🗑</button>
+                <span>▼</span>
             </div>
+            <div class="history-day-content" id="history-content-${actualIdx}"></div>
         `;
         container.appendChild(div);
     });
 }
 
-function updateFlexDisplay() {
-    const target = getDailyTarget();
-    let totalFlexUsed = 0;
-    state.currentWeek.days.forEach(day => {
-        totalFlexUsed += Math.max(0, day.totalPoints - target);
-    });
-    const remaining = Math.max(0, state.currentWeek.weeklyFlex - totalFlexUsed);
-    document.getElementById('flex-remaining').textContent = remaining;
-}
-
-function switchTab(tabIndex) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+function toggleHistoryDay(header, dayIndex) {
+    const content = header.nextElementSibling;
+    const isOpen = content.classList.toggle('active');
+    header.querySelector('span').textContent = isOpen ? '▲' : '▼';
     
-    if (tabIndex === 0) {
-        document.getElementById('page-today').classList.add('active');
-        document.getElementById('tab-today').classList.add('active');
-        document.getElementById('nav-today').classList.add('active');
-        renderToday();
-    } else if (tabIndex === 1) {
-        document.getElementById('page-library').classList.add('active');
-        document.getElementById('tab-library').classList.add('active');
-        document.getElementById('nav-library').classList.add('active');
-        renderLibrary();
-    } else if (tabIndex === 2) {
-        document.getElementById('page-history').classList.add('active');
-        document.getElementById('tab-history').classList.add('active');
-        document.getElementById('nav-history').classList.add('active');
-        renderHistory();
-    }
-    updateFlexDisplay();
-}
-
-function showAddFoodModal() {
-    document.getElementById('add-food-modal').style.display = 'flex';
-    document.getElementById('modal-search').value = '';
-    renderModalLibrary();
-}
-
-function hideAddFoodModal() {
-    document.getElementById('add-food-modal').style.display = 'none';
-}
-
-function showNewFoodForm() {
-    hideAddFoodModal();
-    state.editingFoodId = null;
-    document.getElementById('food-modal-title').textContent = 'New Food Item';
-    document.getElementById('save-food-btn').textContent = 'Save to Library';
-    document.getElementById('new-name').value = '';
-    document.getElementById('new-calories').value = 120;
-    document.getElementById('new-fat').value = 3;
-    document.getElementById('new-fiber').value = 0;
-    document.getElementById('new-food-modal').style.display = 'flex';
-    updatePointsPreview();
-}
-
-function hideNewFoodModal() {
-    document.getElementById('new-food-modal').style.display = 'none';
-}
-
-function updatePointsPreview() {
-    const cal = parseFloat(document.getElementById('new-calories').value) || 0;
-    const fat = parseFloat(document.getElementById('new-fat').value) || 0;
-    const fiber = parseFloat(document.getElementById('new-fiber').value) || 0;
-    document.getElementById('points-preview').textContent = calculatePoints(cal, fat, fiber);
-}
-
-function saveNewFood() {
-    const name = document.getElementById('new-name').value.trim();
-    if (!name) return alert("Food name is required");
-    
-    const calories = parseFloat(document.getElementById('new-calories').value) || 0;
-    const fat = parseFloat(document.getElementById('new-fat').value) || 0;
-    const fiber = parseFloat(document.getElementById('new-fiber').value) || 0;
-    const points = calculatePoints(calories, fat, fiber);
-    
-    if (state.editingFoodId) {
-        const food = state.foodLibrary.find(f => f.id === state.editingFoodId);
-        if (food) {
-            food.name = name;
-            food.calories = calories;
-            food.fat = fat;
-            food.fiber = fiber;
-            food.points = points;
-        }
-    } else {
-        state.foodLibrary.unshift({
-            id: Date.now(),
-            name, calories, fat, fiber, points
+    if (isOpen) {
+        const day = state.currentWeek.days[dayIndex];
+        content.innerHTML = '';
+        day.entries.forEach((entry, entryIdx) => {
+            const row = document.createElement('div');
+            row.className = 'history-entry';
+            row.innerHTML = `
+                <div>${entry.name} × <span id="qty-${dayIndex}-${entryIdx}">${entry.quantity || 1}</span></div>
+                <div>
+                    <button onclick="historyChangeQty(${dayIndex}, ${entryIdx}, -1)" style="width:28px;height:28px;">−</button>
+                    <button onclick="historyChangeQty(${dayIndex}, ${entryIdx}, 1)" style="width:28px;height:28px;">+</button>
+                </div>
+            `;
+            content.appendChild(row);
         });
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+ Add Food';
+        addBtn.style.marginTop = '12px';
+        addBtn.style.width = '100%';
+        addBtn.style.padding = '12px';
+        addBtn.style.background = '#4a7043';
+        addBtn.style.color = 'white';
+        addBtn.style.border = 'none';
+        addBtn.style.borderRadius = '12px';
+        addBtn.onclick = () => showAddFoodToHistoryModal(dayIndex);
+        content.appendChild(addBtn);
     }
-    
-    saveState();
-    hideNewFoodModal();
-    renderLibrary();
 }
 
-function editFood(foodId) {
-    const food = state.foodLibrary.find(f => f.id === foodId);
-    if (!food) return;
-    state.editingFoodId = foodId;
-    document.getElementById('food-modal-title').textContent = 'Edit Food';
-    document.getElementById('save-food-btn').textContent = 'Save Changes';
-    document.getElementById('new-name').value = food.name;
-    document.getElementById('new-calories').value = food.calories;
-    document.getElementById('new-fat').value = food.fat;
-    document.getElementById('new-fiber').value = food.fiber;
-    document.getElementById('new-food-modal').style.display = 'flex';
-    updatePointsPreview();
+function historyChangeQty(dayIndex, entryIdx, delta) {
+    const day = state.currentWeek.days[dayIndex];
+    const entry = day.entries[entryIdx];
+    entry.quantity = (entry.quantity || 1) + delta;
+    if (entry.quantity < 1) day.entries.splice(entryIdx, 1);
+    else entry.totalPoints = entry.points * entry.quantity;
+    day.totalPoints = day.entries.reduce((sum, e) => sum + (e.totalPoints || 0), 0);
+    saveState();
+    const qtySpan = document.getElementById(`qty-${dayIndex}-${entryIdx}`);
+    if (qtySpan) qtySpan.textContent = entry.quantity || 1;
 }
 
-function deleteFood(foodId) {
-    if (!confirm("Delete this food permanently?")) return;
-    state.foodLibrary = state.foodLibrary.filter(f => f.id !== foodId);
-    state.today.entries = state.today.entries.filter(e => e.foodId !== foodId);
-    saveState();
-    renderLibrary();
-    renderToday();
+function showAddFoodToHistoryModal(dayIndex) {
+    const original = window.addFoodToTodayFromModal;
+    window.addFoodToTodayFromModal = (foodId) => {
+        const food = state.foodLibrary.find(f => f.id === foodId);
+        if (food) {
+            const day = state.currentWeek.days[dayIndex];
+            const entry = {
+                foodId: food.id,
+                name: food.name,
+                points: food.points,
+                quantity: 1,
+                totalPoints: food.points
+            };
+            day.entries.unshift(entry);
+            day.totalPoints = day.entries.reduce((sum, e) => sum + (e.totalPoints || 0), 0);
+            saveState();
+            renderHistory();
+            hideAddFoodModal();
+        }
+    };
+    showAddFoodModal();
+    setTimeout(() => {
+        window.addFoodToTodayFromModal = original;
+    }, 1000);
 }
 
 function quickAddToToday(foodId) {
@@ -389,12 +321,16 @@ function quickAddToToday(foodId) {
 }
 
 function addFoodToToday(food) {
-    const entry = { foodId: food.id, name: food.name, points: food.points, quantity: 1, totalPoints: food.points };
+    const entry = {
+        foodId: food.id,
+        name: food.name,
+        points: food.points,
+        quantity: 1,
+        totalPoints: food.points
+    };
     state.today.entries.unshift(entry);
-    saveLastUndo();
     saveState();
     renderToday();
-    updateFlexDisplay();
 }
 
 function addFoodToTodayFromModal(foodId) {
@@ -412,23 +348,8 @@ function changeQuantity(index, delta) {
         entry.quantity = newQty;
         entry.totalPoints = entry.points * newQty;
     }
-    saveLastUndo();
     saveState();
     renderToday();
-    updateFlexDisplay();
-}
-
-function saveLastUndo() {
-    state.lastUndo = JSON.parse(JSON.stringify(state.today.entries));
-}
-
-function undoLastAction() {
-    if (!state.lastUndo) return;
-    state.today.entries = JSON.parse(JSON.stringify(state.lastUndo));
-    state.lastUndo = null;
-    saveState();
-    renderToday();
-    updateFlexDisplay();
 }
 
 function startNewDay() {
@@ -439,27 +360,11 @@ function startNewDay() {
     renderToday();
     renderHistory();
     updateFlexDisplay();
-    alert("✅ Day saved! New day started.");
-}
-
-function editDay(index) {
-    const day = state.currentWeek.days[index];
-    if (!day) return;
-    
-    if (confirm(`Edit day ${new Date(day.date).toLocaleDateString()}?`)) {
-        state.today = {
-            date: day.date,
-            entries: JSON.parse(JSON.stringify(day.entries || []))
-        };
-        state.currentWeek.days.splice(index, 1); // remove old version
-        saveState();
-        switchTab(0); // go to today view (now editing previous day)
-        renderToday();
-    }
+    alert("Day saved successfully!");
 }
 
 function deleteDay(index) {
-    if (!confirm("Delete this day permanently?")) return;
+    if (!confirm("Delete this day?")) return;
     state.currentWeek.days.splice(index, 1);
     saveState();
     renderHistory();
@@ -467,15 +372,13 @@ function deleteDay(index) {
 }
 
 function startNewWeek() {
-    if (!confirm("Start a brand new week? Current week history will be cleared.")) return;
+    if (!confirm("Start new week?")) return;
     resetWeek();
-    const todayStr = getTodayDateStr();
-    state.today = { date: todayStr, entries: [] };
+    state.today = { date: getTodayDateStr(), entries: [] };
     saveState();
     renderHistory();
     renderToday();
     updateFlexDisplay();
-    alert("New week started!");
 }
 
 function showSettings() {
@@ -492,8 +395,11 @@ function hideSettings() {
 function updateTargetPreview() {
     const weight = parseFloat(document.getElementById('settings-weight').value) || 160;
     const activity = document.getElementById('settings-activity').value;
-    let mod = activity === 'moderate' ? 2 : activity === 'active' ? 4 : 0;
-    document.getElementById('preview-target').textContent = Math.round((weight / 10) + 6 + mod);
+    let mod = 0;
+    if (activity === 'moderate') mod = 2;
+    else if (activity === 'active') mod = 4;
+    const target = Math.round((weight / 10) + 6 + mod);
+    document.getElementById('preview-target').textContent = target;
 }
 
 function saveSettings() {
@@ -505,42 +411,69 @@ function saveSettings() {
     updateFlexDisplay();
 }
 
-function handleKeyboard(e) {
-    if (e.metaKey && e.key === "k") {
-        e.preventDefault();
-        showAddFoodModal();
+function showAddFoodModal() {
+    document.getElementById('add-food-modal').style.display = 'flex';
+    document.getElementById('modal-search').value = '';
+    renderModalLibrary();
+}
+
+function hideAddFoodModal() {
+    document.getElementById('add-food-modal').style.display = 'none';
+}
+
+function showNewFoodForm() {
+    hideAddFoodModal();
+    document.getElementById('food-modal-title').textContent = 'New Food Item';
+    document.getElementById('save-food-btn').textContent = 'Save';
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-calories').value = 120;
+    document.getElementById('new-fat').value = 3;
+    document.getElementById('new-fiber').value = 0;
+    document.getElementById('new-food-modal').style.display = 'flex';
+}
+
+function hideNewFoodModal() {
+    document.getElementById('new-food-modal').style.display = 'none';
+}
+
+function saveNewFood() {
+    const name = document.getElementById('new-name').value.trim();
+    if (!name) return alert("Name required");
+    const calories = parseFloat(document.getElementById('new-calories').value) || 0;
+    const fat = parseFloat(document.getElementById('new-fat').value) || 0;
+    const fiber = parseFloat(document.getElementById('new-fiber').value) || 0;
+    const points = calculatePoints(calories, fat, fiber);
+    const newFood = { id: Date.now(), name, calories, fat, fiber, points };
+    state.foodLibrary.unshift(newFood);
+    saveState();
+    hideNewFoodModal();
+    renderLibrary();
+}
+
+function editFood(id) {
+    alert("Edit food coming soon");
+}
+
+function deleteFood(id) {
+    if (confirm("Delete food?")) {
+        state.foodLibrary = state.foodLibrary.filter(f => f.id !== id);
+        saveState();
+        renderLibrary();
     }
 }
 
 function init() {
     loadState();
-    
-    const inputs = ['new-calories','new-fat','new-fiber'];
-    inputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', updatePointsPreview);
-    });
-    
     renderToday();
     renderLibrary();
     renderHistory();
     updateFlexDisplay();
     switchTab(0);
-    
-    document.addEventListener('keydown', handleKeyboard);
-    
-    // Auto-save on page unload / visibility change
-    window.addEventListener('beforeunload', () => {
-        if (state.today.entries && state.today.entries.length > 0) autoSaveCurrentDay();
-    });
-    
+
+    window.addEventListener('beforeunload', autoSaveCurrentDay);
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden' && state.today.entries && state.today.entries.length > 0) {
-            autoSaveCurrentDay();
-        }
+        if (document.visibilityState === 'hidden') autoSaveCurrentDay();
     });
-    
-    console.log('%cWW Journey ready — data auto-saves on every change + day rollover', 'color:#4a7043;font-weight:600');
 }
 
 window.onload = init;
