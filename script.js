@@ -1,4 +1,4 @@
-// script.js - Full file with exact WW Turnaround points
+// script.js - Every day saved (even 0 points)
 let state = {
     foodLibrary: [],
     currentWeek: { startDate: '', weeklyFlex: 35, days: [] },
@@ -8,11 +8,11 @@ let state = {
 
 const STORAGE_KEY = 'ww_tracker_state';
 
-// Exact WW Turnaround (2000-2005) points formula
 function calculatePoints(calories, fat, fiber) {
-    let points = (calories / 50) * 0.8 + (fat / 12) - (fiber / 5);
+    const fiberCapped = Math.min(fiber || 0, 4);
+    let points = (calories / 50) * 0.8 + (fat / 12) - (fiberCapped / 5);
     points = Math.round(points);
-    return Math.max(0, points); // WW allowed 0 points for some items
+    return Math.max(0, points);
 }
 
 function getDailyTarget() {
@@ -37,7 +37,7 @@ function loadState() {
         state = JSON.parse(saved);
         const todayStr = getTodayDateStr();
         if (state.today.date !== todayStr) {
-            if (state.today.entries && state.today.entries.length > 0) autoSaveCurrentDay();
+            autoSaveCurrentDay(); // Always save the day when date changes
             state.today = { date: todayStr, entries: [] };
         }
     } else {
@@ -64,11 +64,10 @@ function resetWeek() {
 }
 
 function autoSaveCurrentDay() {
-    if (!state.today.entries || state.today.entries.length === 0) return;
     const total = state.today.entries.reduce((sum, entry) => sum + (entry.totalPoints || 0), 0);
     const dayRecord = {
         date: state.today.date,
-        entries: JSON.parse(JSON.stringify(state.today.entries)),
+        entries: JSON.parse(JSON.stringify(state.today.entries || [])),
         totalPoints: total
     };
     const existingIndex = state.currentWeek.days.findIndex(d => d.date === state.today.date);
