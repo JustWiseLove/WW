@@ -24,8 +24,9 @@ const DEFAULT_FOODS = [
 ];
 
 function calculatePoints(cal, fat, fiber) {
-    let points = (cal / 50) * 0.8 + (fat / 12) - (fiber / 5);
-    points = Math.round(points);
+    // Closer to classic WW Turnaround
+    let points = (cal / 50) + (fat / 12) - (fiber / 5);
+    points = Math.ceil(points * 0.9);   // slight adjustment for typical rounding behavior
     return Math.max(0, points);
 }
 
