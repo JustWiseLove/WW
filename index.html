@@ -7,139 +7,133 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="app">
+    <div class="container">
+        <!-- Header -->
         <header class="header">
-            <div class="header-content">
-                <div class="logo">
-                    <span class="logo-icon">🧾</span>
-                    <span class="logo-text">WW Journey</span>
-                </div>
-                <div class="header-actions">
-                    <button onclick="showSettings()" class="icon-btn">⚙️</button>
-                </div>
-            </div>
-            <div class="week-summary">
-                <div class="summary-item">
-                    <span class="label">Week Flex</span>
-                    <span id="flex-remaining" class="value">35</span>
-                </div>
-                <div class="summary-item">
-                    <span class="label">Daily Target</span>
-                    <span id="daily-target" class="value">25</span>
-                </div>
+            <h1>WW Journey</h1>
+            <div class="profile-summary">
+                <span id="target-display" class="clickable">Target: 25</span>
             </div>
         </header>
 
-        <nav class="tabs">
-            <button onclick="switchTab(0)" class="tab-btn active" id="tab-today">Today</button>
-            <button onclick="switchTab(1)" class="tab-btn" id="tab-library">Library</button>
-            <button onclick="switchTab(2)" class="tab-btn" id="tab-history">History</button>
-        </nav>
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="today">Today</button>
+            <button class="tab-btn" data-tab="library">Library</button>
+            <button class="tab-btn" data-tab="history">History</button>
+        </div>
 
-        <main class="main-content">
-            <div id="page-today" class="page active">
-                <div class="today-header">
-                    <div class="current-date" id="current-date"></div>
-                    <div class="progress-circle">
-                        <svg width="110" height="110">
-                            <circle cx="55" cy="55" r="48" fill="none" stroke="#e5d9c0" stroke-width="12"></circle>
-                            <circle id="progress-ring" cx="55" cy="55" r="48" fill="none" stroke="#4a7043" stroke-width="12" stroke-dasharray="301.59" stroke-dashoffset="0" transform="rotate(-90 55 55)"></circle>
-                        </svg>
-                        <div class="progress-text">
-                            <div id="today-points" class="big-points">0</div>
-                            <div class="target-label">of <span id="target-small">25</span></div>
-                        </div>
+        <!-- Today Tab -->
+        <div id="today-tab" class="tab-content active">
+            <div class="progress-section">
+                <div class="progress-circle">
+                    <svg id="progress-svg" width="180" height="180">
+                        <circle class="bg-circle" cx="90" cy="90" r="82"></circle>
+                        <circle id="progress-circle" cx="90" cy="90" r="82"></circle>
+                    </svg>
+                    <div class="progress-text">
+                        <div id="points-today" class="points-large">0</div>
+                        <div id="target-small" class="target-small">/ 25</div>
                     </div>
                 </div>
-                <div class="entries-list" id="today-entries"></div>
-                <div class="add-section">
-                    <button onclick="showAddFoodModal()" class="add-food-btn">+ Add Food</button>
-                </div>
             </div>
 
-            <div id="page-library" class="page">
-                <div class="search-bar">
-                    <input type="text" id="library-search" placeholder="Search foods..." onkeyup="filterLibrary()">
-                    <button onclick="showNewFoodForm()" class="add-lib-btn">+ New</button>
-                </div>
-                <div class="library-list" id="library-list"></div>
+            <div class="flex-points">
+                <div>Flex Points This Week: <strong id="flex-remaining">35</strong>/35</div>
+                <small id="week-range"></small>
             </div>
 
-            <div id="page-history" class="page">
-                <div class="history-header">
-                    <button onclick="startNewWeek()" class="new-week-btn">Start New Week</button>
-                </div>
-                <div class="history-list" id="history-list"></div>
+            <div class="daily-entries">
+                <h2>Today's Entries</h2>
+                <div id="today-entries" class="entries-list"></div>
             </div>
-        </main>
 
-        <footer class="bottom-nav">
-            <button onclick="switchTab(0)" class="nav-item active" id="nav-today"><span class="nav-icon">📅</span><span>Today</span></button>
-            <button onclick="switchTab(1)" class="nav-item" id="nav-library"><span class="nav-icon">📚</span><span>Library</span></button>
-            <button onclick="switchTab(2)" class="nav-item" id="nav-history"><span class="nav-icon">📖</span><span>History</span></button>
-        </footer>
+            <button id="add-food-today" class="add-btn">+ Add Food</button>
+        </div>
+
+        <!-- Library Tab -->
+        <div id="library-tab" class="tab-content">
+            <div class="search-bar">
+                <input type="text" id="library-search" placeholder="Search foods...">
+                <button id="add-new-food" class="add-btn-small">+ New</button>
+            </div>
+            
+            <div id="food-library" class="food-grid"></div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="history-tab" class="tab-content">
+            <div id="history-list" class="history-list"></div>
+        </div>
     </div>
 
-    <!-- Modals -->
-    <div id="add-food-modal" class="modal">
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add Food</h3>
-                <button onclick="hideAddFoodModal()" class="close-btn">✕</button>
+            <h3>Daily Target Settings</h3>
+            <div class="modal-input-group">
+                <label>Current Weight (lbs)</label>
+                <input type="number" id="profile-weight" value="160" class="modal-input">
             </div>
-            <div class="modal-body">
-                <input type="text" id="modal-search" placeholder="Search library..." onkeyup="modalSearch()">
-                <div class="modal-library" id="modal-library-list"></div>
+            <div class="modal-input-group">
+                <label>Activity Level</label>
+                <select id="profile-activity" class="modal-input">
+                    <option value="sedentary">Sedentary (little exercise)</option>
+                    <option value="moderate" selected>Moderate (some exercise)</option>
+                    <option value="active">Active (regular exercise)</option>
+                </select>
+            </div>
+            <div class="modal-points" style="margin:20px 0;">
+                Daily Target: <strong id="calculated-target">26</strong> points
+            </div>
+            <div class="modal-actions">
+                <button id="profile-cancel" class="secondary-btn">Cancel</button>
+                <button id="profile-save" class="primary-btn">Save Settings</button>
             </div>
         </div>
     </div>
 
-    <div id="new-food-modal" class="modal">
+    <!-- Add/Edit Food Modal -->
+    <div id="food-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="food-modal-title">New Food Item</h3>
-                <button onclick="hideNewFoodModal()" class="close-btn">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group"><label>Name</label><input type="text" id="new-name"></div>
-                <div class="form-row">
-                    <div class="form-group"><label>Calories</label><input type="number" id="new-calories" value="120"></div>
-                    <div class="form-group"><label>Fat (g)</label><input type="number" id="new-fat" value="3"></div>
+            <h3 id="modal-title">Add New Food</h3>
+            <input type="text" id="food-name" placeholder="Food name" class="modal-input">
+            <div class="modal-grid">
+                <div>
+                    <label>Calories</label>
+                    <input type="number" id="food-cal" value="100" class="modal-input">
                 </div>
-                <div class="form-group"><label>Fiber (g)</label><input type="number" id="new-fiber" value="0"></div>
-                <div class="points-preview">Points: <span id="points-preview">2</span></div>
+                <div>
+                    <label>Fat (g)</label>
+                    <input type="number" id="food-fat" value="0" class="modal-input">
+                </div>
+                <div>
+                    <label>Fiber (g)</label>
+                    <input type="number" id="food-fiber" value="0" class="modal-input">
+                </div>
             </div>
-            <div class="modal-footer">
-                <button onclick="hideNewFoodModal()" class="secondary-btn">Cancel</button>
-                <button onclick="saveNewFood()" class="primary-btn" id="save-food-btn">Save</button>
+            <div class="modal-points">
+                Points: <span id="modal-points">2</span>
+            </div>
+            <div class="modal-actions">
+                <button id="modal-cancel" class="secondary-btn">Cancel</button>
+                <button id="modal-save" class="primary-btn">Save Food</button>
             </div>
         </div>
     </div>
 
-    <div id="settings-modal" class="modal">
+    <!-- Add to Day Modal -->
+    <div id="add-to-day-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3>Settings</h3>
-                <button onclick="hideSettings()" class="close-btn">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group"><label>Weight (lbs)</label><input type="number" id="settings-weight" value="160" oninput="updateTargetPreview()"></div>
-                <div class="form-group">
-                    <label>Activity Level</label>
-                    <select id="settings-activity" onchange="updateTargetPreview()">
-                        <option value="sedentary">Sedentary</option>
-                        <option value="moderate" selected>Moderate</option>
-                        <option value="active">Active</option>
-                    </select>
-                </div>
-                <div class="preview-target">Daily target: <strong id="preview-target">27</strong></div>
-            </div>
-            <div class="modal-footer">
-                <button onclick="hideSettings()" class="secondary-btn">Cancel</button>
-                <button onclick="saveSettings()" class="primary-btn">Save</button>
-            </div>
+            <h3>Add to <span id="modal-day-date"></span></h3>
+            <input type="text" id="add-search" placeholder="Search library..." class="modal-input">
+            <div id="modal-food-list" class="modal-food-list"></div>
+            <button id="close-add-modal" class="secondary-btn">Close</button>
         </div>
     </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
 
     <script src="script.js"></script>
 </body>
