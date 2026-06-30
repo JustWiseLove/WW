@@ -1,15 +1,9 @@
 // script.js
 let state = {
-    profile: {
-        weight: 160,
-        activity: 'moderate'
-    },
+    profile: { weight: 160, activity: 'moderate' },
     foods: [],
     days: {},
-    flexPoints: {
-        weekStart: null,
-        used: 0
-    }
+    flexPoints: { weekStart: null, used: 0 }
 };
 
 const DEFAULT_FOODS = [
@@ -24,9 +18,8 @@ const DEFAULT_FOODS = [
 ];
 
 function calculatePoints(cal, fat, fiber) {
-    // Closer to classic WW Turnaround
     let points = (cal / 50) + (fat / 12) - (fiber / 5);
-    points = Math.ceil(points * 0.9);   // slight adjustment for typical rounding behavior
+    points = Math.ceil(points * 0.9);
     return Math.max(0, points);
 }
 
@@ -42,7 +35,7 @@ function getToday() {
 
 function getMondayOfWeek(dateStr) {
     const date = new Date(dateStr + 'T00:00:00');
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday
+    const dayOfWeek = date.getDay();
     const diff = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
     date.setDate(date.getDate() + diff);
     return date.toISOString().split('T')[0];
@@ -59,7 +52,6 @@ function calculateDailyTarget() {
 function updateFlexWeek() {
     const today = getToday();
     const monday = getMondayOfWeek(today);
-    
     if (!state.flexPoints.weekStart || state.flexPoints.weekStart !== monday) {
         state.flexPoints.weekStart = monday;
         state.flexPoints.used = 0;
@@ -86,97 +78,103 @@ function loadState() {
     const saved = localStorage.getItem('ww_tracker_state');
     if (saved) {
         state = JSON.parse(saved);
-        // Ensure flexPoints exists
-        if (!state.flexPoints) {
-            state.flexPoints = { weekStart: null, used: 0 };
-        }
+        if (!state.flexPoints) state.flexPoints = { weekStart: null, used: 0 };
     } else {
         state.foods = [...DEFAULT_FOODS];
         const today = getToday();
         state.days[today] = { date: today, entries: [] };
         state.flexPoints = { weekStart: null, used: 0 };
     }
-    
     const today = getToday();
-    if (!state.days[today]) {
-        state.days[today] = { date: today, entries: [] };
-    }
-    
+    if (!state.days[today]) state.days[today] = { date: today, entries: [] };
     updateFlexWeek();
 }
 
 function renderToday() {
     const todayDate = getToday();
     const dayData = state.days[todayDate] || { entries: [] };
-    
-    const totalPoints = dayData.entries.reduce((sum, entry) => {
-        return sum + (entry.points * (entry.qty || 1));
-    }, 0);
-    
+    const totalPoints = dayData.entries.reduce((sum, entry) => sum + (entry.points * (entry.qty || 1)), 0);
     const target = calculateDailyTarget();
-    
+
     const percentage = Math.min((totalPoints / target) * 100, 100);
     const circumference = 2 * Math.PI * 82;
     const offset = circumference - (percentage / 100) * circumference;
-    
+
     const progressCircle = document.getElementById('progress-circle');
     progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
     progressCircle.style.strokeDashoffset = offset;
-    
+
     document.getElementById('points-today').textContent = totalPoints;
     document.getElementById('target-small').textContent = `/ ${target}`;
     document.getElementById('target-display').textContent = `Target: ${target}`;
-    
+
     updateFlexWeek();
     document.getElementById('flex-remaining').textContent = getFlexRemaining();
     document.getElementById('week-range').textContent = `${state.flexPoints.weekStart} — ${getSunday()}`;
-    
+
     const container = document.getElementById('today-entries');
     container.innerHTML = '';
-    
+
     if (dayData.entries.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#999;">No entries yet today.<br>Add some food!</div>`;
         return;
     }
-    
+
     dayData.entries.forEach((entry, index) => {
+        const qty = entry.qty || 1;
         const div = document.createElement('div');
         div.className = 'entry-card';
         div.innerHTML = `
             <div class="entry-info">
                 <div class="entry-name">${entry.name}</div>
-                <div class="entry-points">${entry.points} pts × ${entry.qty || 1}</div>
+                <div class="entry-points">${entry.points} pts × ${qty}</div>
             </div>
             <div class="entry-qty">
                 <button class="qty-btn minus" data-index="${index}">-</button>
-                <span>${entry.qty || 1}</span>
+                <span>${qty}</span>
                 <button class="qty-btn plus" data-index="${index}">+</button>
             </div>
         `;
         container.appendChild(div);
     });
-    
-    document.querySelectorAll('#today-entries .minus').forEach(btn => {
-        btn.addEventListener('click', () => adjustTodayQty(parseInt(btn.dataset.index), -1));
+
+    // Attach listeners
+    container.querySelectorAll('.minus').forEach(btn => {
+        btn.addEventListener('click', () => adjustQty(todayDate, parseInt(btn.dataset.index), -1));
     });
-    
-    document.querySelectorAll('#today-entries .plus').forEach(btn => {
-        btn.addEventListener('click', () => adjustTodayQty(parseInt(btn.dataset.index), 1));
+    container.querySelectorAll('.plus').forEach(btn => {
+        btn.addEventListener('click', () => adjustQty(todayDate, parseInt(btn.dataset.index), 1));
     });
 }
 
-function adjustTodayQty(index, change) {
-    const todayDate = getToday();
-    const dayData = state.days[todayDate];
+function adjustQty(date, index, change) {
+    const dayData = state.days[date];
     if (!dayData || !dayData.entries[index]) return;
-    
+
     const entry = dayData.entries[index];
-    entry.qty = Math.max(1, (entry.qty || 1) + change);
+    let newQty = (entry.qty || 1) + change;
+
+    if (newQty < 1) {
+        // Remove the entry
+        dayData.entries.splice(index, 1);
+        showToast('Entry removed');
+    } else {
+        entry.qty = newQty;
+    }
+
     saveState();
-    renderToday();
+
+    if (date === getToday()) {
+        renderToday();
+    } else {
+        const container = document.getElementById(`entries-${date}`);
+        if (container && container.classList.contains('active')) {
+            renderHistoryEntries(date, container);
+        }
+    }
 }
 
-function renderLibrary() {
+function renderLibrary() { /* unchanged - same as previous version */ 
     const container = document.getElementById('food-library');
     container.innerHTML = '';
     const searchTerm = document.getElementById('library-search').value.toLowerCase();
@@ -184,7 +182,6 @@ function renderLibrary() {
     state.foods.forEach(food => {
         if (searchTerm && !food.name.toLowerCase().includes(searchTerm)) return;
         const points = calculatePoints(food.cal, food.fat, food.fiber);
-        
         const div = document.createElement('div');
         div.className = 'food-item';
         div.innerHTML = `
@@ -197,16 +194,14 @@ function renderLibrary() {
     });
 }
 
-function renderHistory() {
+function renderHistory() { /* unchanged */ 
     const container = document.getElementById('history-list');
     container.innerHTML = '';
-    
     const dates = Object.keys(state.days).sort().reverse();
     
     dates.forEach(date => {
         const dayData = state.days[date];
         const total = dayData.entries.reduce((sum, e) => sum + (e.points * (e.qty || 1)), 0);
-        
         const dayDiv = document.createElement('div');
         dayDiv.className = 'history-day';
         dayDiv.innerHTML = `
@@ -217,7 +212,6 @@ function renderHistory() {
             <div class="history-entries" id="entries-${date}"></div>
         `;
         container.appendChild(dayDiv);
-        
         dayDiv.querySelector('.history-header').addEventListener('click', () => toggleHistoryDay(date));
     });
 }
@@ -234,62 +228,54 @@ function toggleHistoryDay(date) {
 function renderHistoryEntries(date, container) {
     container.innerHTML = '';
     const dayData = state.days[date];
-    
+
     const addBtn = document.createElement('button');
     addBtn.className = 'add-btn-small';
     addBtn.textContent = '+ Add Food';
     addBtn.style.marginBottom = '16px';
     addBtn.addEventListener('click', () => openAddToDayModal(date));
     container.appendChild(addBtn);
-    
+
     dayData.entries.forEach((entry, index) => {
+        const qty = entry.qty || 1;
         const div = document.createElement('div');
         div.className = 'entry-card';
         div.innerHTML = `
             <div class="entry-info">
                 <div class="entry-name">${entry.name}</div>
-                <div class="entry-points">${entry.points} pts × ${entry.qty || 1}</div>
+                <div class="entry-points">${entry.points} pts × ${qty}</div>
             </div>
             <div class="entry-qty">
                 <button class="qty-btn minus" data-index="${index}" data-date="${date}">-</button>
-                <span>${entry.qty || 1}</span>
+                <span>${qty}</span>
                 <button class="qty-btn plus" data-index="${index}" data-date="${date}">+</button>
             </div>
         `;
         container.appendChild(div);
     });
-    
+
     container.querySelectorAll('.minus').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopImmediatePropagation();
-            adjustHistoryQty(btn.dataset.date, parseInt(btn.dataset.index), -1);
+            adjustQty(btn.dataset.date, parseInt(btn.dataset.index), -1);
         });
     });
-    
     container.querySelectorAll('.plus').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopImmediatePropagation();
-            adjustHistoryQty(btn.dataset.date, parseInt(btn.dataset.index), 1);
+            adjustQty(btn.dataset.date, parseInt(btn.dataset.index), 1);
         });
     });
 }
 
-function adjustHistoryQty(date, index, change) {
-    const dayData = state.days[date];
-    if (!dayData || !dayData.entries[index]) return;
-    const entry = dayData.entries[index];
-    entry.qty = Math.max(1, (entry.qty || 1) + change);
-    saveState();
-    const container = document.getElementById(`entries-${date}`);
-    if (container) renderHistoryEntries(date, container);
-}
+// Rest of the functions (openFoodModal, saveFood, profile, addFoodToDay, etc.) remain unchanged
+// ... (copy from previous version)
 
 let currentEditingFoodId = null;
 
 function openFoodModal(food = null) {
     const modal = document.getElementById('food-modal');
     document.getElementById('modal-title').textContent = food ? 'Edit Food' : 'Add New Food';
-    
     if (food) {
         currentEditingFoodId = food.id;
         document.getElementById('food-name').value = food.name;
@@ -322,24 +308,19 @@ function editFood(id) {
 function saveFood() {
     const name = document.getElementById('food-name').value.trim();
     if (!name) return;
-    
     const cal = parseFloat(document.getElementById('food-cal').value) || 0;
     const fat = parseFloat(document.getElementById('food-fat').value) || 0;
     const fiber = parseFloat(document.getElementById('food-fiber').value) || 0;
-    
+
     if (currentEditingFoodId !== null) {
         const food = state.foods.find(f => f.id === currentEditingFoodId);
         if (food) {
-            food.name = name;
-            food.cal = cal;
-            food.fat = fat;
-            food.fiber = fiber;
+            food.name = name; food.cal = cal; food.fat = fat; food.fiber = fiber;
         }
     } else {
         const maxId = state.foods.length ? Math.max(...state.foods.map(f => f.id)) : 0;
         state.foods.push({ id: maxId + 1, name, cal, fat, fiber });
     }
-    
     saveState();
     closeModals();
     renderLibrary();
@@ -356,9 +337,7 @@ function openProfileModal() {
 function updateCalculatedTarget() {
     const weight = parseFloat(document.getElementById('profile-weight').value) || 160;
     const activity = document.getElementById('profile-activity').value;
-    let modifier = 0;
-    if (activity === 'moderate') modifier = 2;
-    if (activity === 'active') modifier = 4;
+    let modifier = activity === 'moderate' ? 2 : activity === 'active' ? 4 : 0;
     const target = Math.round((weight / 10) + 6 + modifier);
     document.getElementById('calculated-target').textContent = target;
 }
@@ -382,10 +361,9 @@ function openAddToDayModal(date) {
     closeModals();
     const modal = document.getElementById('add-to-day-modal');
     document.getElementById('modal-day-date').textContent = date;
-    
     const listContainer = document.getElementById('modal-food-list');
     const searchInput = document.getElementById('add-search');
-    
+
     const renderList = () => {
         listContainer.innerHTML = '';
         const term = searchInput.value.toLowerCase();
@@ -396,14 +374,11 @@ function openAddToDayModal(date) {
             item.className = 'food-item';
             item.style.marginBottom = '10px';
             item.innerHTML = `<h4>${food.name}</h4><div class="points">${points} pts</div>`;
-            item.addEventListener('click', () => {
-                addFoodToDay(date, food);
-                closeModals();
-            });
+            item.addEventListener('click', () => { addFoodToDay(date, food); closeModals(); });
             listContainer.appendChild(item);
         });
     };
-    
+
     searchInput.oninput = renderList;
     renderList();
     modal.style.display = 'flex';
@@ -411,28 +386,15 @@ function openAddToDayModal(date) {
 
 function addFoodToDay(date, food) {
     if (!state.days[date]) state.days[date] = { date, entries: [] };
-    
     const points = calculatePoints(food.cal, food.fat, food.fiber);
-    state.days[date].entries.push({
-        name: food.name,
-        cal: food.cal,
-        fat: food.fat,
-        fiber: food.fiber,
-        points: points,
-        qty: 1
-    });
-    
+    state.days[date].entries.push({ name: food.name, cal: food.cal, fat: food.fat, fiber: food.fiber, points, qty: 1 });
     saveState();
-    
-    if (date === getToday()) {
-        renderToday();
-    } else {
-        const container = document.getElementById(`entries-${date}`);
-        if (container && container.classList.contains('active')) {
-            renderHistoryEntries(date, container);
-        }
+    if (date === getToday()) renderToday();
+    else {
+        const cont = document.getElementById(`entries-${date}`);
+        if (cont && cont.classList.contains('active')) renderHistoryEntries(date, cont);
     }
-    showToast('Added to day!');
+    showToast('Added!');
 }
 
 function showToast(message) {
@@ -453,30 +415,28 @@ function setupListeners() {
             if (btn.dataset.tab === 'history') renderHistory();
         });
     });
-    
+
     document.getElementById('add-food-today').addEventListener('click', () => openAddToDayModal(getToday()));
     document.getElementById('add-new-food').addEventListener('click', () => openFoodModal());
     document.getElementById('target-display').addEventListener('click', openProfileModal);
-    
+
     document.getElementById('profile-cancel').addEventListener('click', closeModals);
     document.getElementById('profile-save').addEventListener('click', saveProfile);
     document.getElementById('profile-weight').addEventListener('input', updateCalculatedTarget);
     document.getElementById('profile-activity').addEventListener('change', updateCalculatedTarget);
-    
+
     document.getElementById('modal-cancel').addEventListener('click', closeModals);
     document.getElementById('modal-save').addEventListener('click', saveFood);
     document.getElementById('close-add-modal').addEventListener('click', closeModals);
-    
-    ['food-cal', 'food-fat', 'food-fiber'].forEach(id => {
+
+    ['food-cal','food-fat','food-fiber'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updateModalPoints);
     });
-    
+
     document.getElementById('library-search').addEventListener('input', renderLibrary);
-    
-    document.addEventListener('keydown', e => {
-        if (e.key === "Escape") closeModals();
-    });
+
+    document.addEventListener('keydown', e => { if (e.key === "Escape") closeModals(); });
 }
 
 function init() {
@@ -485,11 +445,9 @@ function init() {
     renderToday();
     renderLibrary();
     renderHistory();
-    
     window.addEventListener('beforeunload', saveState);
     setInterval(saveState, 30000);
-    
-    console.log('%cWW Journey ready!', 'color:#4a7043; font-weight:bold');
+    console.log('%cWW Journey - Delete by setting qty to 0 enabled', 'color:#4a7043; font-weight:bold');
 }
 
 init();
