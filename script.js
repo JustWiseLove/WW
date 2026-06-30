@@ -3,7 +3,7 @@ let state = {
     profile: { weight: 160, activity: 'moderate' },
     foods: [],
     days: {},
-    flexPoints: { weekStart: null, used: 0 }
+    flexPoints: { weekStart: null, used: 0 }   // used can be >35 (negative remaining)
 };
 
 const DEFAULT_FOODS = [
@@ -54,12 +54,33 @@ function updateFlexWeek() {
     const monday = getMondayOfWeek(today);
     if (!state.flexPoints.weekStart || state.flexPoints.weekStart !== monday) {
         state.flexPoints.weekStart = monday;
-        state.flexPoints.used = 0;
+        state.flexPoints.used = 0;   // reset at new week
     }
 }
 
+function calculateFlexUsed() {
+    updateFlexWeek();
+    let totalOver = 0;
+    const monday = state.flexPoints.weekStart;
+    const sunday = getSunday();
+
+    Object.keys(state.days).forEach(date => {
+        if (date < monday || date > sunday) return;
+        const dayData = state.days[date];
+        const dailyTotal = dayData.entries.reduce((sum, e) => sum + (e.points * (e.qty || 1)), 0);
+        const target = calculateDailyTarget();   // same target every day
+        if (dailyTotal > target) {
+            totalOver += (dailyTotal - target);
+        }
+    });
+
+    state.flexPoints.used = totalOver;
+    return totalOver;
+}
+
 function getFlexRemaining() {
-    return Math.max(0, 35 - (state.flexPoints.used || 0));
+    const used = calculateFlexUsed();
+    return 35 - used;   // can be negative
 }
 
 function getSunday() {
@@ -108,8 +129,8 @@ function renderToday() {
     document.getElementById('target-small').textContent = `/ ${target}`;
     document.getElementById('target-display').textContent = `Target: ${target}`;
 
-    updateFlexWeek();
-    document.getElementById('flex-remaining').textContent = getFlexRemaining();
+    const remaining = getFlexRemaining();
+    document.getElementById('flex-remaining').textContent = remaining;
     document.getElementById('week-range').textContent = `${state.flexPoints.weekStart} — ${getSunday()}`;
 
     const container = document.getElementById('today-entries');
@@ -138,7 +159,6 @@ function renderToday() {
         container.appendChild(div);
     });
 
-    // Attach listeners
     container.querySelectorAll('.minus').forEach(btn => {
         btn.addEventListener('click', () => adjustQty(todayDate, parseInt(btn.dataset.index), -1));
     });
@@ -155,7 +175,6 @@ function adjustQty(date, index, change) {
     let newQty = (entry.qty || 1) + change;
 
     if (newQty < 1) {
-        // Remove the entry
         dayData.entries.splice(index, 1);
         showToast('Entry removed');
     } else {
@@ -163,18 +182,16 @@ function adjustQty(date, index, change) {
     }
 
     saveState();
+    renderToday();   // always refresh today + flex
 
-    if (date === getToday()) {
-        renderToday();
-    } else {
-        const container = document.getElementById(`entries-${date}`);
-        if (container && container.classList.contains('active')) {
-            renderHistoryEntries(date, container);
-        }
+    // Refresh history if open
+    const container = document.getElementById(`entries-${date}`);
+    if (container && container.classList.contains('active')) {
+        renderHistoryEntries(date, container);
     }
 }
 
-function renderLibrary() { /* unchanged - same as previous version */ 
+function renderLibrary() {
     const container = document.getElementById('food-library');
     container.innerHTML = '';
     const searchTerm = document.getElementById('library-search').value.toLowerCase();
@@ -194,7 +211,7 @@ function renderLibrary() { /* unchanged - same as previous version */
     });
 }
 
-function renderHistory() { /* unchanged */ 
+function renderHistory() {
     const container = document.getElementById('history-list');
     container.innerHTML = '';
     const dates = Object.keys(state.days).sort().reverse();
@@ -267,9 +284,6 @@ function renderHistoryEntries(date, container) {
         });
     });
 }
-
-// Rest of the functions (openFoodModal, saveFood, profile, addFoodToDay, etc.) remain unchanged
-// ... (copy from previous version)
 
 let currentEditingFoodId = null;
 
@@ -447,7 +461,7 @@ function init() {
     renderHistory();
     window.addEventListener('beforeunload', saveState);
     setInterval(saveState, 30000);
-    console.log('%cWW Journey - Delete by setting qty to 0 enabled', 'color:#4a7043; font-weight:bold');
+    console.log('%cWW Journey - Flex points now deduct daily overages', 'color:#4a7043; font-weight:bold');
 }
 
 init();
