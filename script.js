@@ -332,7 +332,6 @@ function updateModalPoints() {
         document.getElementById('modal-points').textContent = parseInt(manual);
         return;
     }
-
     const cal = parseFloat(document.getElementById('food-cal').value) || 0;
     const fat = parseFloat(document.getElementById('food-fat').value) || 0;
     const fiber = parseFloat(document.getElementById('food-fiber').value) || 0;
@@ -347,7 +346,6 @@ function editFood(id) {
 function saveFood() {
     const name = document.getElementById('food-name').value.trim();
 
-    // Delete food if name is cleared
     if (currentEditingFoodId !== null && name === '') {
         state.foods = state.foods.filter(f => f.id !== currentEditingFoodId);
         saveState();
@@ -510,6 +508,14 @@ function setupListeners() {
 
     document.getElementById('library-search').addEventListener('input', renderLibrary);
 
+    // Reset App Data
+    document.getElementById('reset-app').addEventListener('click', () => {
+        if (confirm('Reset ALL app data? This cannot be undone.')) {
+            localStorage.removeItem('ww_tracker_state');
+            location.reload();
+        }
+    });
+
     document.addEventListener('keydown', e => { if (e.key === "Escape") closeModals(); });
 }
 
@@ -521,7 +527,7 @@ function init() {
     renderHistory();
     window.addEventListener('beforeunload', saveState);
     setInterval(saveState, 30000);
-    console.log('%cWW Journey - Complete & Ready', 'color:#4a7043; font-weight:bold');
+    console.log('%cWW Journey - Complete', 'color:#4a7043; font-weight:bold');
 }
 
 init();
