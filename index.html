@@ -8,7 +8,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <header class="header">
             <h1>WW Journey</h1>
             <div class="profile-summary">
@@ -16,14 +15,12 @@
             </div>
         </header>
 
-        <!-- Tabs -->
         <div class="tabs">
             <button class="tab-btn active" data-tab="today">Today</button>
             <button class="tab-btn" data-tab="library">Library</button>
             <button class="tab-btn" data-tab="history">History</button>
         </div>
 
-        <!-- Today Tab -->
         <div id="today-tab" class="tab-content active">
             <div class="progress-section">
                 <div class="progress-circle">
@@ -51,17 +48,14 @@
             <button id="add-food-today" class="add-btn">+ Add Food</button>
         </div>
 
-        <!-- Library Tab -->
         <div id="library-tab" class="tab-content">
             <div class="search-bar">
                 <input type="text" id="library-search" placeholder="Search foods...">
                 <button id="add-new-food" class="add-btn-small">+ New</button>
             </div>
-            
             <div id="food-library" class="food-grid"></div>
         </div>
 
-        <!-- History Tab -->
         <div id="history-tab" class="tab-content">
             <div id="history-list" class="history-list"></div>
         </div>
@@ -78,9 +72,9 @@
             <div class="modal-input-group">
                 <label>Activity Level</label>
                 <select id="profile-activity" class="modal-input">
-                    <option value="sedentary">Sedentary (little exercise)</option>
-                    <option value="moderate" selected>Moderate (some exercise)</option>
-                    <option value="active">Active (regular exercise)</option>
+                    <option value="sedentary">Sedentary</option>
+                    <option value="moderate" selected>Moderate</option>
+                    <option value="active">Active</option>
                 </select>
             </div>
             <div class="modal-points" style="margin:20px 0;">
@@ -93,11 +87,12 @@
         </div>
     </div>
 
-    <!-- Add/Edit Food Modal -->
+    <!-- Food Modal -->
     <div id="food-modal" class="modal">
         <div class="modal-content">
             <h3 id="modal-title">Add New Food</h3>
             <input type="text" id="food-name" placeholder="Food name" class="modal-input">
+
             <div class="modal-grid">
                 <div>
                     <label>Calories</label>
@@ -112,9 +107,16 @@
                     <input type="number" id="food-fiber" value="0" class="modal-input">
                 </div>
             </div>
+
+            <div class="manual-points">
+                <label>Manual Points (optional - overrides calculation)</label>
+                <input type="number" id="food-manual-points" placeholder="e.g. 6" class="modal-input" min="0">
+            </div>
+
             <div class="modal-points">
                 Points: <span id="modal-points">2</span>
             </div>
+
             <div class="modal-actions">
                 <button id="modal-cancel" class="secondary-btn">Cancel</button>
                 <button id="modal-save" class="primary-btn">Save Food</button>
@@ -132,7 +134,6 @@
         </div>
     </div>
 
-    <!-- Toast -->
     <div id="toast" class="toast"></div>
 
     <script src="script.js"></script>
