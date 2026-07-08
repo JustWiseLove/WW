@@ -1,9 +1,9 @@
-// script.js
+// script.js - Final Version
 let state = {
     profile: { weight: 160, activity: 'moderate' },
     foods: [],
     days: {},
-    flexPoints: { weekStart: null, used: 0 }   // used can be >35 (negative remaining)
+    flexPoints: { weekStart: null, used: 0 }
 };
 
 const DEFAULT_FOODS = [
@@ -54,7 +54,7 @@ function updateFlexWeek() {
     const monday = getMondayOfWeek(today);
     if (!state.flexPoints.weekStart || state.flexPoints.weekStart !== monday) {
         state.flexPoints.weekStart = monday;
-        state.flexPoints.used = 0;   // reset at new week
+        state.flexPoints.used = 0;
     }
 }
 
@@ -68,10 +68,8 @@ function calculateFlexUsed() {
         if (date < monday || date > sunday) return;
         const dayData = state.days[date];
         const dailyTotal = dayData.entries.reduce((sum, e) => sum + (e.points * (e.qty || 1)), 0);
-        const target = calculateDailyTarget();   // same target every day
-        if (dailyTotal > target) {
-            totalOver += (dailyTotal - target);
-        }
+        const target = calculateDailyTarget();
+        if (dailyTotal > target) totalOver += (dailyTotal - target);
     });
 
     state.flexPoints.used = totalOver;
@@ -80,7 +78,7 @@ function calculateFlexUsed() {
 
 function getFlexRemaining() {
     const used = calculateFlexUsed();
-    return 35 - used;   // can be negative
+    return 35 - used;
 }
 
 function getSunday() {
@@ -89,6 +87,18 @@ function getSunday() {
     const sun = new Date(mon);
     sun.setDate(sun.getDate() + 6);
     return sun.toISOString().split('T')[0];
+}
+
+function getHistoryDates() {
+    const dates = [];
+    const monday = state.flexPoints.weekStart || getMondayOfWeek(getToday());
+    const monDate = new Date(monday);
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(monDate);
+        d.setDate(d.getDate() + i);
+        dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
 }
 
 function saveState() {
@@ -137,7 +147,7 @@ function renderToday() {
     container.innerHTML = '';
 
     if (dayData.entries.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#999;">No entries yet today.<br>Add some food!</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#999;">No entries yet today.<br>Tap + Add Food</div>`;
         return;
     }
 
@@ -168,8 +178,8 @@ function renderToday() {
 }
 
 function adjustQty(date, index, change) {
-    const dayData = state.days[date];
-    if (!dayData || !dayData.entries[index]) return;
+    const dayData = state.days[date] || (state.days[date] = { date, entries: [] });
+    if (!dayData.entries[index]) return;
 
     const entry = dayData.entries[index];
     let newQty = (entry.qty || 1) + change;
@@ -182,9 +192,8 @@ function adjustQty(date, index, change) {
     }
 
     saveState();
-    renderToday();   // always refresh today + flex
+    renderToday();
 
-    // Refresh history if open
     const container = document.getElementById(`entries-${date}`);
     if (container && container.classList.contains('active')) {
         renderHistoryEntries(date, container);
@@ -198,7 +207,7 @@ function renderLibrary() {
     
     state.foods.forEach(food => {
         if (searchTerm && !food.name.toLowerCase().includes(searchTerm)) return;
-        const points = calculatePoints(food.cal, food.fat, food.fiber);
+        const points = food.manualPoints !== undefined ? food.manualPoints : calculatePoints(food.cal, food.fat, food.fiber);
         const div = document.createElement('div');
         div.className = 'food-item';
         div.innerHTML = `
@@ -214,16 +223,17 @@ function renderLibrary() {
 function renderHistory() {
     const container = document.getElementById('history-list');
     container.innerHTML = '';
-    const dates = Object.keys(state.days).sort().reverse();
-    
+    const dates = getHistoryDates();
+
     dates.forEach(date => {
-        const dayData = state.days[date];
+        const dayData = state.days[date] || { entries: [] };
         const total = dayData.entries.reduce((sum, e) => sum + (e.points * (e.qty || 1)), 0);
+
         const dayDiv = document.createElement('div');
         dayDiv.className = 'history-day';
         dayDiv.innerHTML = `
             <div class="history-header" data-date="${date}">
-                <div class="history-date">${date}</div>
+                <div class="history-date">${date} ${date === getToday() ? '(Today)' : ''}</div>
                 <div class="history-total">${total} pts</div>
             </div>
             <div class="history-entries" id="entries-${date}"></div>
@@ -235,16 +245,20 @@ function renderHistory() {
 
 function toggleHistoryDay(date) {
     document.querySelectorAll('.history-entries').forEach(el => el.classList.remove('active'));
-    const container = document.getElementById(`entries-${date}`);
-    if (container) {
-        container.classList.add('active');
-        renderHistoryEntries(date, container);
+    let container = document.getElementById(`entries-${date}`);
+    if (!container) {
+        const dayDiv = document.querySelector(`[data-date="${date}"]`).parentElement;
+        container = document.createElement('div');
+        container.className = 'history-entries';
+        container.id = `entries-${date}`;
+        dayDiv.appendChild(container);
     }
+    container.classList.add('active');
+    renderHistoryEntries(date, container);
 }
 
 function renderHistoryEntries(date, container) {
     container.innerHTML = '';
-    const dayData = state.days[date];
 
     const addBtn = document.createElement('button');
     addBtn.className = 'add-btn-small';
@@ -252,6 +266,8 @@ function renderHistoryEntries(date, container) {
     addBtn.style.marginBottom = '16px';
     addBtn.addEventListener('click', () => openAddToDayModal(date));
     container.appendChild(addBtn);
+
+    const dayData = state.days[date] || { entries: [] };
 
     dayData.entries.forEach((entry, index) => {
         const qty = entry.qty || 1;
@@ -290,24 +306,33 @@ let currentEditingFoodId = null;
 function openFoodModal(food = null) {
     const modal = document.getElementById('food-modal');
     document.getElementById('modal-title').textContent = food ? 'Edit Food' : 'Add New Food';
+
     if (food) {
         currentEditingFoodId = food.id;
         document.getElementById('food-name').value = food.name;
-        document.getElementById('food-cal').value = food.cal;
-        document.getElementById('food-fat').value = food.fat;
-        document.getElementById('food-fiber').value = food.fiber;
+        document.getElementById('food-cal').value = food.cal || 0;
+        document.getElementById('food-fat').value = food.fat || 0;
+        document.getElementById('food-fiber').value = food.fiber || 0;
+        document.getElementById('food-manual-points').value = food.manualPoints !== undefined ? food.manualPoints : '';
     } else {
         currentEditingFoodId = null;
         document.getElementById('food-name').value = '';
         document.getElementById('food-cal').value = 100;
         document.getElementById('food-fat').value = 0;
         document.getElementById('food-fiber').value = 0;
+        document.getElementById('food-manual-points').value = '';
     }
     updateModalPoints();
     modal.style.display = 'flex';
 }
 
 function updateModalPoints() {
+    const manual = document.getElementById('food-manual-points').value.trim();
+    if (manual !== '') {
+        document.getElementById('modal-points').textContent = parseInt(manual);
+        return;
+    }
+
     const cal = parseFloat(document.getElementById('food-cal').value) || 0;
     const fat = parseFloat(document.getElementById('food-fat').value) || 0;
     const fiber = parseFloat(document.getElementById('food-fiber').value) || 0;
@@ -321,20 +346,47 @@ function editFood(id) {
 
 function saveFood() {
     const name = document.getElementById('food-name').value.trim();
-    if (!name) return;
+
+    // Delete food if name is cleared
+    if (currentEditingFoodId !== null && name === '') {
+        state.foods = state.foods.filter(f => f.id !== currentEditingFoodId);
+        saveState();
+        closeModals();
+        renderLibrary();
+        showToast('Food deleted');
+        return;
+    }
+
+    if (!name) {
+        showToast('Food name is required');
+        return;
+    }
+
     const cal = parseFloat(document.getElementById('food-cal').value) || 0;
     const fat = parseFloat(document.getElementById('food-fat').value) || 0;
     const fiber = parseFloat(document.getElementById('food-fiber').value) || 0;
+    const manualStr = document.getElementById('food-manual-points').value.trim();
+    const manualPoints = manualStr !== '' ? parseInt(manualStr) : undefined;
+
+    const points = manualPoints !== undefined ? manualPoints : calculatePoints(cal, fat, fiber);
 
     if (currentEditingFoodId !== null) {
         const food = state.foods.find(f => f.id === currentEditingFoodId);
         if (food) {
-            food.name = name; food.cal = cal; food.fat = fat; food.fiber = fiber;
+            food.name = name;
+            food.cal = cal;
+            food.fat = fat;
+            food.fiber = fiber;
+            if (manualPoints !== undefined) food.manualPoints = manualPoints;
+            else delete food.manualPoints;
         }
     } else {
         const maxId = state.foods.length ? Math.max(...state.foods.map(f => f.id)) : 0;
-        state.foods.push({ id: maxId + 1, name, cal, fat, fiber });
+        const newFood = { id: maxId + 1, name, cal, fat, fiber };
+        if (manualPoints !== undefined) newFood.manualPoints = manualPoints;
+        state.foods.push(newFood);
     }
+
     saveState();
     closeModals();
     renderLibrary();
@@ -383,12 +435,15 @@ function openAddToDayModal(date) {
         const term = searchInput.value.toLowerCase();
         state.foods.forEach(food => {
             if (term && !food.name.toLowerCase().includes(term)) return;
-            const points = calculatePoints(food.cal, food.fat, food.fiber);
+            const points = food.manualPoints !== undefined ? food.manualPoints : calculatePoints(food.cal, food.fat, food.fiber);
             const item = document.createElement('div');
             item.className = 'food-item';
             item.style.marginBottom = '10px';
             item.innerHTML = `<h4>${food.name}</h4><div class="points">${points} pts</div>`;
-            item.addEventListener('click', () => { addFoodToDay(date, food); closeModals(); });
+            item.addEventListener('click', () => { 
+                addFoodToDay(date, food); 
+                closeModals(); 
+            });
             listContainer.appendChild(item);
         });
     };
@@ -400,14 +455,19 @@ function openAddToDayModal(date) {
 
 function addFoodToDay(date, food) {
     if (!state.days[date]) state.days[date] = { date, entries: [] };
-    const points = calculatePoints(food.cal, food.fat, food.fiber);
-    state.days[date].entries.push({ name: food.name, cal: food.cal, fat: food.fat, fiber: food.fiber, points, qty: 1 });
+    const points = food.manualPoints !== undefined ? food.manualPoints : calculatePoints(food.cal, food.fat, food.fiber);
+    state.days[date].entries.push({
+        name: food.name,
+        cal: food.cal,
+        fat: food.fat,
+        fiber: food.fiber,
+        points: points,
+        qty: 1
+    });
     saveState();
-    if (date === getToday()) renderToday();
-    else {
-        const cont = document.getElementById(`entries-${date}`);
-        if (cont && cont.classList.contains('active')) renderHistoryEntries(date, cont);
-    }
+    renderToday();
+    const cont = document.getElementById(`entries-${date}`);
+    if (cont && cont.classList.contains('active')) renderHistoryEntries(date, cont);
     showToast('Added!');
 }
 
@@ -443,7 +503,7 @@ function setupListeners() {
     document.getElementById('modal-save').addEventListener('click', saveFood);
     document.getElementById('close-add-modal').addEventListener('click', closeModals);
 
-    ['food-cal','food-fat','food-fiber'].forEach(id => {
+    ['food-cal','food-fat','food-fiber','food-manual-points'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updateModalPoints);
     });
@@ -461,7 +521,7 @@ function init() {
     renderHistory();
     window.addEventListener('beforeunload', saveState);
     setInterval(saveState, 30000);
-    console.log('%cWW Journey - Flex points now deduct daily overages', 'color:#4a7043; font-weight:bold');
+    console.log('%cWW Journey - Complete & Ready', 'color:#4a7043; font-weight:bold');
 }
 
 init();
